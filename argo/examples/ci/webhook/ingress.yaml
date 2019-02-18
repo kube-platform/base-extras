@@ -1,0 +1,15 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  annotations:
+    kubernetes.io/ingress.class: nginx
+  name: github-access
+spec:
+  rules:
+  - host: go-example.my.domain.com
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: webhook-gateway-http
+          servicePort: 80

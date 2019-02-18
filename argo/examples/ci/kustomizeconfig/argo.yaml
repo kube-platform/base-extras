@@ -1,0 +1,27 @@
+nameReference:
+- kind: ConfigMap
+  fieldSpecs:
+  - path: spec/configMap
+    kind: Gateway
+- kind: ServiceAccount
+  fieldSpecs:
+  - path: spec/deploySpec/spec/serviceAccountName
+    kind: Gateway
+- kind: Gateway
+  fieldSpecs:
+  - path: spec/deploySpec/metadata/name
+    kind: Gateway
+  - path: spec/serviceSpec/spec/selector/gateway-name
+    kind: Gateway
+  - path: spec/rules/http/paths/backend/serviceName
+    kind: Ingress
+
+namePrefix:
+- path: spec/serviceSpec/metadata/name
+- path: metadata/labels/gateway-name
+- path: spec/deploySpec/metadata/labels/gateway-name
+- path: spec/deploySpec/metadata/name
+
+namespace:
+- path: spec/triggers/resource/namespace
+  create: false

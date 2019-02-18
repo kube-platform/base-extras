@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: webhook-gateway-configmap
+data:
+  push: |-
+    port: "80"
+    endpoint: "/push"
+    method: "POST"

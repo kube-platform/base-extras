@@ -1,0 +1,125 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: github-sensor
+  labels:
+    sensors.argoproj.io/sensor-controller-instanceid: argo-events
+spec:
+  deploySpec:
+    containers:
+      - name: "sensor"
+        image: "argoproj/sensor"
+    serviceAccountName: github-gateway-http
+  dependencies:
+    - name: webhook-gateway-http:push
+  eventProtocol:
+    type: "HTTP"
+    http:
+      port: "9300"
+  triggers:
+    - name: github-workflow-trigger
+      resource:
+        namespace: default
+        group: argoproj.io
+        version: v1alpha1
+        kind: Workflow
+        # The parameters from the workflow are overridden by the webhook's message
+        # An empty path means complete payload will be passed to trigger
+        parameters:
+          - src:
+              event: "webhook-gateway-http:push"
+              # select a specific property from event
+              path: repository.clone_url
+            dest: spec.arguments.parameters.0.value
+        source:
+          inline: |
+            apiVersion: argoproj.io/v1alpha1
+            kind: Workflow
+            metadata:
+              generateName: go-example-via-webhook-event
+            spec:
+              entrypoint: ci-example
+              arguments:
+                parameters:
+                - name: repo
+                - name: revision
+                  value: master
+              volumeClaimTemplates:
+              - metadata:
+                  name: workdir
+                spec:
+                  accessModes: [ "ReadWriteOnce" ]
+                  resources:
+                    requests:
+                      storage: 1Gi
+              templates:
+              - name: ci-example
+                inputs:
+                  parameters:
+                  - name: revision
+                steps:
+                - - name: build
+                    template: build-golang-example
+                    arguments:
+                      parameters:
+                      - name: revision
+                        value: "{{inputs.parameters.revision}}"
+                # the test step expands into three parallel steps running
+                # different operating system images. each mounts the workdir
+                # and runs the compiled binary from the build step.
+                - - name: test
+                    template: run-hello
+                    arguments:
+                      parameters:
+                      - name: os-image
+                        value: "{{item.image}}:{{item.tag}}"
+                    withItems:
+                    - { image: 'debian', tag: '9.1' }
+                    - { image: 'alpine', tag: '3.6' }
+                    - { image: 'ubuntu', tag: '17.10' }
+                - - name: containerize
+                    template: containerize  
+              - name: build-golang-example
+                inputs:
+                  parameters:
+                  - name: revision
+                  artifacts:
+                  - name: code
+                    path: /go/src/github.com/golang/example
+                    git:
+                      repo: https://github.com/golang/example.git
+                      revision: "{{inputs.parameters.revision}}"
+                container:
+                  image: golang:1.8
+                  command: [sh, -c]
+                  args: ["
+                    cd /go/src/github.com/golang/example/hello &&
+                    git status &&
+                    echo 'FROM scratch\\nCOPY hello /\\nCMD [/hello]' > /go/Dockerfile &&
+                    go build -v .
+                  "]
+                  volumeMounts:
+                  - name: workdir
+                    mountPath: /go
+              - name: run-hello
+                inputs:
+                  parameters:
+                  - name: os-image
+                container:
+                  image: "{{inputs.parameters.os-image}}"
+                  command: [sh, -c]
+                  args: ["
+                    uname -a ;
+                    cat /etc/os-release ;
+                    /go/src/github.com/golang/example/hello/hello
+                  "]
+                  volumeMounts:
+                  - name: workdir
+                    mountPath: /go
+              - name: containerize
+                container:
+                  image: gcr.io/kaniko-project/executor
+                  args: ["--dockerfile=/go/Dockerfile", "--no-push", "--context=/go/src/github.com/golang/example/hello/"]
+                  volumeMounts:
+                  - name: workdir
+                    mountPath: /go  
