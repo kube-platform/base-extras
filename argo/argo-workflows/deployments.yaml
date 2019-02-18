@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argo-ui
+spec:
+  selector:
+    matchLabels:
+      app: argo-ui
+  template:
+    metadata:
+      labels:
+        app: argo-ui
+    spec:
+      containers:
+      - env:
+        - name: ARGO_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        - name: IN_CLUSTER
+          value: "true"
+        - name: ENABLE_WEB_CONSOLE
+          value: "false"
+        - name: BASE_HREF
+          value: /
+        image: argoproj/argoui:v2.2.1-37808b1
+        name: argo-ui
+      serviceAccountName: argo-ui
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workflow-controller
+spec:
+  selector:
+    matchLabels:
+      app: workflow-controller
+  template:
+    metadata:
+      labels:
+        app: workflow-controller
+    spec:
+      containers:
+      - args:
+        - --configmap
+        - $(WORKFLOW_CONTROLLER_CM)
+        - --executor-image
+        - argoproj/argoexec:v2.2.1
+        command:
+        - workflow-controller
+        image: argoproj/workflow-controller:v2.2.1
+        name: workflow-controller
+      serviceAccountName: argo
